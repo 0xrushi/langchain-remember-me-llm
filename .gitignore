@@ -1,2 +1,3 @@
 cache/*
 !cache/.gitkeep 
+!cache/.reminders.db 

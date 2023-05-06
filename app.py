@@ -1,3 +1,4 @@
+import sqlite3
 from llama_index import SimpleDirectoryReader, LangchainEmbedding, GPTListIndex,GPTVectorStoreIndex as GPTSimpleVectorIndex, PromptHelper
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from llama_index import LLMPredictor, ServiceContext
@@ -27,7 +28,32 @@ class customLLM(LLM):
 
     def _llm_type(self):
         return "custom"
+    
+# -------------DB---------------
+DB_FILE = '/root/.cache/reminders.db'
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS reminders
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL)''')
+    conn.commit()
+    conn.close()
 
+def add_to_db(text):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("INSERT INTO reminders (text) VALUES (?)", (text,))
+    conn.commit()
+    conn.close()
+
+def get_rows_from_db():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT text FROM reminders")
+    rows = c.fetchall()
+    conn.close()
+    return rows
+# ----------------------------
 
 llm_predictor = LLMPredictor(llm=customLLM())
 
@@ -36,13 +62,10 @@ embed_model = LangchainEmbedding(hfemb)
 
 """## Save your remember to questions in this text_list DB"""
 
-text_list = ["remember i have kept my keys in the bedroom drawer", "I need to go to shopping on saturday"]
+# text_list = ["remember i have kept my keys in the bedroom drawer", "I need to go to shopping on saturday"]
 
-documents = [Document(t) for t in text_list]
-
+init_db()
 service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor, embed_model=embed_model)
-index = GPTSimpleVectorIndex.from_documents(documents, service_context=service_context)
-query_engine = index.as_query_engine()
 
 @app.route("/", methods=['GET'])
 def rootpage():
@@ -51,8 +74,21 @@ def rootpage():
 @app.route('/query', methods=['GET'])
 def query():
     query = request.args.get('query', default='', type=str)
+    rows = get_rows_from_db()
+    documents = [Document(row[0]) for row in rows]
+    index = GPTSimpleVectorIndex.from_documents(documents, service_context=service_context)
+    query_engine = index.as_query_engine()
+
     response = query_engine.query(query)
     return jsonify({'response': response.response})
+
+@app.route('/write', methods=['POST'])
+def write():
+    content = request.json.get('content')
+    if not content:
+        return jsonify({'error': 'Content is required'}), 400
+    add_to_db(content)
+    return jsonify({'message': 'Content added successfully'})
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')
