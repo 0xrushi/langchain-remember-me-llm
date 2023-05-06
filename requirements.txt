@@ -1,0 +1,5 @@
+llama_index
+langchain
+transformers
+sentence_transformers
+flask
