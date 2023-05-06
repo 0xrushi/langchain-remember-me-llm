@@ -44,6 +44,10 @@ service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor, embe
 index = GPTSimpleVectorIndex.from_documents(documents, service_context=service_context)
 query_engine = index.as_query_engine()
 
+@app.route("/", methods=['GET'])
+def rootpage():
+    return jsonify({'response': "hello world"})
+
 @app.route('/query', methods=['GET'])
 def query():
     query = request.args.get('query', default='', type=str)
